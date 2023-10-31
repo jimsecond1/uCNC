@@ -1164,6 +1164,9 @@ extern void rp2040_core0_loop();
 #define ucnc_init rp2040_core0_setup
 #define ucnc_run rp2040_core0_loop
 
+//force all atomic on exit
+// #define __ATOMIC__ for (bool __restore_atomic__ __attribute__((__cleanup__(__atomic_out))) = true, __AtomLock = __atomic_in(); __AtomLock; __AtomLock = false)
+
 #ifdef __cplusplus
 }
 #endif

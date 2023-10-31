@@ -61,7 +61,7 @@ uint16_t bt_settings_offset;
 #endif
 
 #ifndef WIFI_PASS
-#define WIFI_PASS "pass\0"
+#define WIFI_PASS "password\0"
 #endif
 
 WebServer web_server(80);
@@ -1096,10 +1096,10 @@ extern "C"
  * µCNC core runs on core 1
  *
  * */
-
+#include "pico/mutex.h"
 extern "C"
 {
-
+	mutex_t rp2040_ucnc_mutex;
 	static volatile bool rp2040_global_isr_enabled;
 	// ISR
 /**
@@ -1109,18 +1109,9 @@ extern "C"
 #ifndef mcu_enable_global_isr
 	void mcu_enable_global_isr(void)
 	{
-		// already enabled?? exit
-		// if (rp2040_global_isr_enabled)
-		// {
-		// 	return;
-		// }
-
-		// first re-enable interrupts
-		// interrupts();
-		// __enable_irq();
-		// then the other core
-		// rp2040.resumeOtherCore();
+		// only owner can unlock
 		rp2040_global_isr_enabled = true;
+		mutex_exit(&rp2040_ucnc_mutex);
 	}
 #endif
 
@@ -1131,17 +1122,21 @@ extern "C"
 #ifndef mcu_disable_global_isr
 	void mcu_disable_global_isr(void)
 	{
-		// already disabled?? exit
-		// if (!rp2040_global_isr_enabled)
-		// {
-		// 	return;
-		// }
+		uint32_t owner;
+		uint32_t cpu = get_core_num();
+		if (!mutex_try_enter(&rp2040_ucnc_mutex, &owner))
+		{
+			if (owner == cpu)
+			{
+				// will enter a Deadlock!
+				// this might be an indicator that it's waiting for some work done by the other CPU
+				// unlocks to allow the other CPU to continue
+				mcu_enable_global_isr();
+				mcu_delay_loop(1);
+			}
+			mutex_enter_blocking(&rp2040_ucnc_mutex);
+		}
 		rp2040_global_isr_enabled = false;
-		// first stop the other core
-		// rp2040.idleOtherCore();
-		// then disable interrupts
-		// noInterrupts();
-		// __disable_irq();
 	}
 #endif
 
@@ -1159,8 +1154,9 @@ extern "C"
 
 void rp2040_core0_setup()
 {
-	// interrupts initial state
-	mcu_enable_global_isr();
+	// initialize mutex
+	mutex_init(&rp2040_ucnc_mutex);
+	rp2040_global_isr_enabled = true;
 	// needs eeprom initialization to allow getting wifi stored settings
 	rp2040_eeprom_init(1024);
 	rp2040_uart_init(BAUDRATE);

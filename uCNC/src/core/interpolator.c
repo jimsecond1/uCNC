@@ -1292,7 +1292,7 @@ MCU_CALLBACK void mcu_step_cb(void)
 		--itp_rt_sgm->remaining_steps;
 	}
 
-	mcu_disable_global_isr(); // lock isr before clearin busy flag
+	mcu_disable_global_isr(); // lock isr before clearing busy flag
 	itp_busy = false;
 #ifdef ENABLE_MULTI_STEP_HOMING
 	stepbits = (new_stepbits & ~itp_step_lock);

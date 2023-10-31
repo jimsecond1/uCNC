@@ -195,10 +195,10 @@ extern "C"
 #define FORCEINLINE __attribute__((always_inline)) inline
 #endif
 
-	static FORCEINLINE uint8_t __atomic_in(void)
+	static FORCEINLINE bool __atomic_in(void)
 	{
 		mcu_disable_global_isr();
-		return 1;
+		return true;
 	}
 
 	static FORCEINLINE void __atomic_out(bool *s)
@@ -210,10 +210,10 @@ extern "C"
 	}
 
 #ifndef __ATOMIC__
-#define __ATOMIC__ for (bool __restore_atomic__ __attribute__((__cleanup__(__atomic_out))) = mcu_get_global_isr(), __AtomLock = __atomic_in(); __AtomLock; __AtomLock = 0)
+#define __ATOMIC__ for (bool __restore_atomic__ __attribute__((__cleanup__(__atomic_out))) = mcu_get_global_isr(), __AtomLock = __atomic_in(); __AtomLock; __AtomLock = false)
 #endif
 #ifndef __ATOMIC_FORCEON__
-#define __ATOMIC_FORCEON__ for (bool __restore_atomic__ __attribute__((__cleanup__(__atomic_out))) = true, __AtomLock = __atomic_in(); __AtomLock; __AtomLock = 0)
+#define __ATOMIC_FORCEON__ for (bool __restore_atomic__ __attribute__((__cleanup__(__atomic_out))) = true, __AtomLock = __atomic_in(); __AtomLock; __AtomLock = false)
 #endif
 
 #define __STRGIFY__(s) #s

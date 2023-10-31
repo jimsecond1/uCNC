@@ -245,7 +245,10 @@ void mcu_rtc_isr(void)
 	ms_servo_counter = (servo_counter != 20) ? servo_counter : 0;
 
 #endif
-	mcu_rtc_cb(millis());
+	__ATOMIC__
+	{
+		mcu_rtc_cb(millis());
+	}
 }
 
 static void mcu_usart_init(void)
@@ -293,7 +296,6 @@ void mcu_init(void)
 	// // Enable the alarm irq
 	// irq_set_enabled(ITP_TIMER_IRQ, true);
 #endif
-	
 }
 
 /**
@@ -357,24 +359,27 @@ static uint32_t mcu_step_counter;
 static uint32_t mcu_step_reload;
 static void mcu_itp_isr(void)
 {
-	static bool resetstep = false;
-
-	// Clear the alarm irq
-	hw_clear_bits(&timer_hw->intr, (1U << ITP_TIMER));
-	uint32_t target = (uint32_t)timer_hw->timerawl + mcu_step_reload;
-	timer_hw->alarm[ITP_TIMER] = target;
-
-	if (!resetstep)
+	__ATOMIC__
 	{
-		mcu_step_cb();
-	}
+		static bool resetstep = false;
 
-	else
-	{
-		mcu_step_reset_cb();
-	}
+		// Clear the alarm irq
+		hw_clear_bits(&timer_hw->intr, (1U << ITP_TIMER));
+		uint32_t target = (uint32_t)timer_hw->timerawl + mcu_step_reload;
+		timer_hw->alarm[ITP_TIMER] = target;
 
-	resetstep = !resetstep;
+		if (!resetstep)
+		{
+			mcu_step_cb();
+		}
+
+		else
+		{
+			mcu_step_reset_cb();
+		}
+
+		resetstep = !resetstep;
+	}
 }
 
 /**
