@@ -186,8 +186,8 @@ WEAK_EVENT_HANDLER(settings_erase)
 
 static uint8_t settings_size_crc(uint16_t size, uint8_t crc)
 {
-	crc = crc7(((uint8_t *)&size)[0], crc);
-	return crc7(((uint8_t *)&size)[1], crc);
+	crc = crc7((uint8_t)(size & 0xFF), crc);
+	return crc7((uint8_t)(size >> 8), crc);
 }
 
 void settings_init(void)

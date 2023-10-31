@@ -680,7 +680,7 @@ void rp2040_wifi_bt_process(void)
 		}
 	}
 
-	web_server.handleClient();
+	// web_server.handleClient();
 #endif
 
 #ifdef ENABLE_BLUETOOTH
@@ -970,7 +970,13 @@ extern "C"
 {
 	void rp2040_eeprom_init(int size)
 	{
+		static volatile bool eeprom_initialized = false;
+		if (eeprom_initialized)
+		{
+			return;
+		}
 		EEPROM.begin(size);
+		eeprom_initialized = true;
 	}
 
 	uint8_t rp2040_eeprom_read(uint16_t address)
@@ -1081,6 +1087,108 @@ extern "C"
 		return I2C_NOTOK;
 	}
 }
+#endif
+
+/**
+ *
+ * Multicore
+ * All communications run through core 0
+ * µCNC core runs on core 1
+ *
+ * */
+
+extern "C"
+{
+
+	static volatile bool rp2040_global_isr_enabled;
+	// ISR
+/**
+ * enables global interrupts on the MCU
+ * can be defined either as a function or a macro call
+ * */
+#ifndef mcu_enable_global_isr
+	void mcu_enable_global_isr(void)
+	{
+		// already enabled?? exit
+		// if (rp2040_global_isr_enabled)
+		// {
+		// 	return;
+		// }
+
+		// first re-enable interrupts
+		// interrupts();
+		// __enable_irq();
+		// then the other core
+		// rp2040.resumeOtherCore();
+		rp2040_global_isr_enabled = true;
+	}
+#endif
+
+/**
+ * disables global interrupts on the MCU
+ * can be defined either as a function or a macro call
+ * */
+#ifndef mcu_disable_global_isr
+	void mcu_disable_global_isr(void)
+	{
+		// already disabled?? exit
+		// if (!rp2040_global_isr_enabled)
+		// {
+		// 	return;
+		// }
+		rp2040_global_isr_enabled = false;
+		// first stop the other core
+		// rp2040.idleOtherCore();
+		// then disable interrupts
+		// noInterrupts();
+		// __disable_irq();
+	}
+#endif
+
+/**
+ * gets global interrupts state on the MCU
+ * can be defined either as a function or a macro call
+ * */
+#ifndef mcu_get_global_isr
+	bool mcu_get_global_isr(void)
+	{
+		return rp2040_global_isr_enabled;
+	}
+#endif
+}
+
+void rp2040_core0_setup()
+{
+	// interrupts initial state
+	mcu_enable_global_isr();
+	// needs eeprom initialization to allow getting wifi stored settings
+	rp2040_eeprom_init(1024);
+	rp2040_uart_init(BAUDRATE);
+}
+
+void rp2040_core0_loop()
+{
+#ifdef ENABLE_WIFI
+	web_server.handleClient();
+#endif
+}
+
+void setup1(void)
+{
+	delay(500);
+	cnc_init();
+}
+
+void loop1(void)
+{
+	cnc_run();
+}
+
+#ifndef ucnc_init
+#define ucnc_init cnc_init
+#endif
+#ifndef ucnc_run
+#define ucnc_run cnc_run
 #endif
 
 #endif

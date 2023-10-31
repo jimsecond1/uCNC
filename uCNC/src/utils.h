@@ -201,24 +201,19 @@ extern "C"
 		return 1;
 	}
 
-	static FORCEINLINE void __atomic_out(uint8_t *s)
+	static FORCEINLINE void __atomic_out(bool *s)
 	{
-		if (*s != 0)
+		if (*s)
 		{
 			mcu_enable_global_isr();
 		}
 	}
 
-	static FORCEINLINE void __atomic_out_on(uint8_t *s)
-	{
-		mcu_enable_global_isr();
-	}
-
 #ifndef __ATOMIC__
-#define __ATOMIC__ for (uint8_t __restore_atomic__ __attribute__((__cleanup__(__atomic_out))) = mcu_get_global_isr(), __AtomLock = __atomic_in(); __AtomLock; __AtomLock = 0)
+#define __ATOMIC__ for (bool __restore_atomic__ __attribute__((__cleanup__(__atomic_out))) = mcu_get_global_isr(), __AtomLock = __atomic_in(); __AtomLock; __AtomLock = 0)
 #endif
 #ifndef __ATOMIC_FORCEON__
-#define __ATOMIC_FORCEON__ for (uint8_t __restore_atomic__ __attribute__((__cleanup__(__atomic_out_on))) = 1, __AtomLock = __atomic_in(); __AtomLock; __AtomLock = 0)
+#define __ATOMIC_FORCEON__ for (bool __restore_atomic__ __attribute__((__cleanup__(__atomic_out))) = true, __AtomLock = __atomic_in(); __AtomLock; __AtomLock = 0)
 #endif
 
 #define __STRGIFY__(s) #s

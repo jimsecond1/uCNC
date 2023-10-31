@@ -1158,6 +1158,12 @@ extern "C"
 #endif
 #endif
 
+extern void rp2040_core0_setup();
+extern void rp2040_core0_loop();
+
+#define ucnc_init rp2040_core0_setup
+#define ucnc_run rp2040_core0_loop
+
 #ifdef __cplusplus
 }
 #endif

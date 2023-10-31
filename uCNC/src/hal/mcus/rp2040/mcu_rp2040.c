@@ -23,8 +23,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-static volatile bool rp2040_global_isr_enabled;
-
 extern void rp2040_uart_init(int baud);
 extern void rp2040_uart_process(void);
 
@@ -252,7 +250,7 @@ void mcu_rtc_isr(void)
 
 static void mcu_usart_init(void)
 {
-	rp2040_uart_init(BAUDRATE);
+	// rp2040_uart_init(BAUDRATE);
 }
 
 /**
@@ -295,6 +293,7 @@ void mcu_init(void)
 	// // Enable the alarm irq
 	// irq_set_enabled(ITP_TIMER_IRQ, true);
 #endif
+	
 }
 
 /**
@@ -350,40 +349,7 @@ uint8_t mcu_get_pwm(uint8_t pwm)
 #endif
 
 // ISR
-/**
- * enables global interrupts on the MCU
- * can be defined either as a function or a macro call
- * */
-#ifndef mcu_enable_global_isr
-void mcu_enable_global_isr(void)
-{
-	// ets_intr_unlock();
-	rp2040_global_isr_enabled = true;
-}
-#endif
-
-/**
- * disables global interrupts on the MCU
- * can be defined either as a function or a macro call
- * */
-#ifndef mcu_disable_global_isr
-void mcu_disable_global_isr(void)
-{
-	rp2040_global_isr_enabled = false;
-	// ets_intr_lock();
-}
-#endif
-
-/**
- * gets global interrupts state on the MCU
- * can be defined either as a function or a macro call
- * */
-#ifndef mcu_get_global_isr
-bool mcu_get_global_isr(void)
-{
-	return rp2040_global_isr_enabled;
-}
-#endif
+// implemented in the cpp file
 
 // Step interpolator
 
@@ -393,7 +359,6 @@ static void mcu_itp_isr(void)
 {
 	static bool resetstep = false;
 
-	mcu_disable_global_isr();
 	// Clear the alarm irq
 	hw_clear_bits(&timer_hw->intr, (1U << ITP_TIMER));
 	uint32_t target = (uint32_t)timer_hw->timerawl + mcu_step_reload;
@@ -410,7 +375,6 @@ static void mcu_itp_isr(void)
 	}
 
 	resetstep = !resetstep;
-	mcu_enable_global_isr();
 }
 
 /**
