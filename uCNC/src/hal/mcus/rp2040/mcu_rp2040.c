@@ -479,7 +479,7 @@ uint32_t mcu_micros()
  * */
 void mcu_dotasks(void)
 {
-	rp2040_uart_process();
+	// rp2040_uart_process();
 }
 
 // Non volatile memory

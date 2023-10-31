@@ -680,7 +680,7 @@ void rp2040_wifi_bt_process(void)
 		}
 	}
 
-	// web_server.handleClient();
+	web_server.handleClient();
 #endif
 
 #ifdef ENABLE_BLUETOOTH
@@ -1100,7 +1100,7 @@ extern "C"
 extern "C"
 {
 	mutex_t rp2040_ucnc_mutex;
-	static volatile bool rp2040_global_isr_enabled;
+	// static volatile bool rp2040_global_isr_enabled;
 	// ISR
 /**
  * enables global interrupts on the MCU
@@ -1110,7 +1110,12 @@ extern "C"
 	void mcu_enable_global_isr(void)
 	{
 		// only owner can unlock
-		rp2040_global_isr_enabled = true;
+		// rp2040_global_isr_enabled = true;
+		uint32_t core = get_core_num();
+		if (rp2040_ucnc_mutex.owner != core)
+		{
+			return;
+		}
 		mutex_exit(&rp2040_ucnc_mutex);
 	}
 #endif
@@ -1123,10 +1128,10 @@ extern "C"
 	void mcu_disable_global_isr(void)
 	{
 		uint32_t owner;
-		uint32_t cpu = get_core_num();
 		if (!mutex_try_enter(&rp2040_ucnc_mutex, &owner))
 		{
-			if (owner == cpu)
+			uint32_t core = get_core_num();
+			if (owner == core)
 			{
 				// will enter a Deadlock!
 				// this might be an indicator that it's waiting for some work done by the other CPU
@@ -1136,7 +1141,7 @@ extern "C"
 			}
 			mutex_enter_blocking(&rp2040_ucnc_mutex);
 		}
-		rp2040_global_isr_enabled = false;
+		// rp2040_global_isr_enabled = false;
 	}
 #endif
 
@@ -1147,7 +1152,9 @@ extern "C"
 #ifndef mcu_get_global_isr
 	bool mcu_get_global_isr(void)
 	{
-		return rp2040_global_isr_enabled;
+		// return rp2040_global_isr_enabled;
+		uint32_t core = get_core_num();
+		return (rp2040_ucnc_mutex.owner != core);
 	}
 #endif
 }
@@ -1156,7 +1163,6 @@ void rp2040_core0_setup()
 {
 	// initialize mutex
 	mutex_init(&rp2040_ucnc_mutex);
-	rp2040_global_isr_enabled = true;
 	// needs eeprom initialization to allow getting wifi stored settings
 	rp2040_eeprom_init(1024);
 	rp2040_uart_init(BAUDRATE);
@@ -1164,9 +1170,10 @@ void rp2040_core0_setup()
 
 void rp2040_core0_loop()
 {
-#ifdef ENABLE_WIFI
-	web_server.handleClient();
-#endif
+	rp2040_uart_process();
+// #ifdef ENABLE_WIFI
+// 	web_server.handleClient();
+// #endif
 }
 
 void setup1(void)
