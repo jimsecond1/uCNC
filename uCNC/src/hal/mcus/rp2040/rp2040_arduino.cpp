@@ -554,9 +554,10 @@ void mcu_wifi_flush(void)
 		while (!BUFFER_EMPTY(wifi_tx))
 		{
 			uint8_t tmp[WIFI_TX_BUFFER_SIZE];
+			uint8_t* ptr = tmp;
 			uint8_t r;
 
-			BUFFER_READ(wifi_tx, tmp, WIFI_TX_BUFFER_SIZE, r);
+			BUFFER_READ(wifi_tx, ptr, WIFI_TX_BUFFER_SIZE, r);
 			server_client.write(tmp, r);
 		}
 	}
@@ -606,9 +607,10 @@ void mcu_bt_flush(void)
 	while (!BUFFER_EMPTY(bt_tx))
 	{
 		uint8_t tmp[BLUETOOTH_TX_BUFFER_SIZE];
+		uint8_t* ptr = tmp;
 		uint8_t r;
 
-		BUFFER_READ(bt_tx, tmp, BLUETOOTH_TX_BUFFER_SIZE, r);
+		BUFFER_READ(bt_tx, ptr, BLUETOOTH_TX_BUFFER_SIZE, r);
 		SerialBT.write(tmp, r);
 		SerialBT.flush();
 	}
@@ -655,8 +657,6 @@ bool rp2040_wifi_bt_rx_ready(void)
 void rp2040_wifi_bt_process(void)
 {
 #ifdef ENABLE_WIFI
-	DECL_BUFFER(uint8_t, wifi_rx, RX_BUFFER_SIZE);
-
 	if (rp2040_wifi_clientok())
 	{
 		while (server_client.available() > 0)
@@ -670,8 +670,7 @@ void rp2040_wifi_bt_process(void)
 					c = OVF;
 				}
 
-				*(BUFFER_NEXT_FREE(wifi_rx)) = c;
-				BUFFER_STORE(wifi_rx);
+				BUFFER_ENQUEUE(wifi_rx, &c);
 			}
 
 #else
@@ -697,8 +696,7 @@ void rp2040_wifi_bt_process(void)
 				c = OVF;
 			}
 
-			*(BUFFER_NEXT_FREE(bt_rx)) = c;
-			BUFFER_STORE(bt_rx);
+			BUFFER_ENQUEUE(bt_rx, &c);
 		}
 
 #else
@@ -712,7 +710,7 @@ void rp2040_wifi_bt_process(void)
 
 extern "C"
 {
-	void rp2040_uart_init(int baud)
+	void rp2040_coms_init(int baud)
 	{
 #ifdef MCU_HAS_USB
 		Serial.begin(baud);
@@ -770,9 +768,10 @@ extern "C"
 		while (!BUFFER_EMPTY(usb_tx))
 		{
 			uint8_t tmp[USB_TX_BUFFER_SIZE];
+			uint8_t* ptr = tmp;
 			uint8_t r;
 
-			BUFFER_READ(usb_tx, tmp, USB_TX_BUFFER_SIZE, r);
+			BUFFER_READ(usb_tx, ptr, USB_TX_BUFFER_SIZE, r);
 			Serial.write(tmp, r);
 			Serial.flush();
 		}
@@ -817,9 +816,10 @@ extern "C"
 		while (!BUFFER_EMPTY(uart_tx))
 		{
 			uint8_t tmp[UART_TX_BUFFER_SIZE];
+			uint8_t* ptr = tmp;
 			uint8_t r = 0;
 
-			BUFFER_READ(uart_tx, tmp, UART_TX_BUFFER_SIZE, r);
+			BUFFER_READ(uart_tx, ptr, UART_TX_BUFFER_SIZE, r);
 			COM_UART.write(tmp, r);
 			COM_UART.flush();
 		}
@@ -885,7 +885,7 @@ extern "C"
 		return ((Serial.available() > 0) || wifiready);
 	}
 
-	void rp2040_uart_process(void)
+	void rp2040_coms_process(void)
 	{
 #ifdef MCU_HAS_USB
 		while (Serial.available() > 0)
@@ -899,8 +899,7 @@ extern "C"
 					c = OVF;
 				}
 
-				*(BUFFER_NEXT_FREE(usb_rx)) = c;
-				BUFFER_STORE(usb_rx);
+				BUFFER_ENQUEUE(usb_rx, &c);
 			}
 
 #else
@@ -921,8 +920,7 @@ extern "C"
 					c = OVF;
 				}
 
-				*(BUFFER_NEXT_FREE(uart_rx)) = c;
-				BUFFER_STORE(uart_rx);
+				BUFFER_ENQUEUE(uart_rx, &c);
 			}
 #else
 			mcu_uart_rx_cb((uint8_t)COM_UART.read());
@@ -942,8 +940,7 @@ extern "C"
 					c = OVF;
 				}
 
-				*(BUFFER_NEXT_FREE(uart2_rx)) = c;
-				BUFFER_STORE(uart2_rx);
+				BUFFER_ENQUEUE(uart2_rx, &c);
 			}
 
 #else
@@ -1165,15 +1162,15 @@ void rp2040_core0_setup()
 	mutex_init(&rp2040_ucnc_mutex);
 	// needs eeprom initialization to allow getting wifi stored settings
 	rp2040_eeprom_init(1024);
-	rp2040_uart_init(BAUDRATE);
+	rp2040_coms_init(BAUDRATE);
 }
 
 void rp2040_core0_loop()
 {
-	rp2040_uart_process();
-// #ifdef ENABLE_WIFI
-// 	web_server.handleClient();
-// #endif
+	rp2040_coms_process();
+	#ifdef ENABLE_WIFI
+		web_server.handleClient();
+	#endif
 }
 
 void setup1(void)

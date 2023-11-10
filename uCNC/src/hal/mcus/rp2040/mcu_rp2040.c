@@ -23,8 +23,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-extern void rp2040_uart_init(int baud);
-extern void rp2040_uart_process(void);
+// extern void rp2040_uart_init(int baud);
+// extern void rp2040_uart_process(void);
 
 extern void rp2040_eeprom_init(int size);
 extern uint8_t rp2040_eeprom_read(uint16_t address);

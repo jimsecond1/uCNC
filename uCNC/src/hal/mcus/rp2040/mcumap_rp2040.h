@@ -1113,9 +1113,9 @@ extern "C"
 
 #ifndef BYTE_OPS
 #define BYTE_OPS
-#define SETBIT(x, y) ((x) |= (1UL << (y)))	 /* Set bit y in byte x*/
+#define SETBIT(x, y) ((x) |= (1UL << (y)))	  /* Set bit y in byte x*/
 #define CLEARBIT(x, y) ((x) &= ~(1UL << (y))) /* Clear bit y in byte x*/
-#define CHECKBIT(x, y) ((x) & (1UL << (y)))	 /* Check bit y in byte x*/
+#define CHECKBIT(x, y) ((x) & (1UL << (y)))	  /* Check bit y in byte x*/
 #define TOGGLEBIT(x, y) ((x) ^= (1UL << (y))) /* Toggle bit y in byte x*/
 
 #define SETFLAG(x, y) ((x) |= (y))	  /* Set byte y in byte x*/
@@ -1158,14 +1158,76 @@ extern "C"
 #endif
 #endif
 
-extern void rp2040_core0_setup();
-extern void rp2040_core0_loop();
+	extern void rp2040_core0_setup();
+	extern void rp2040_core0_loop();
 
 #define ucnc_init rp2040_core0_setup
 #define ucnc_run rp2040_core0_loop
 
-//force all atomic on exit
-// #define __ATOMIC__ for (bool __restore_atomic__ __attribute__((__cleanup__(__atomic_out))) = true, __AtomLock = __atomic_in(); __AtomLock; __AtomLock = false)
+	// force all atomic on exit
+	//  #define __ATOMIC__ for (bool __restore_atomic__ __attribute__((__cleanup__(__atomic_out))) = true, __AtomLock = __atomic_in(); __AtomLock; __AtomLock = false)
+
+	/**
+	 * Implements custom multicore safe buffers
+	 * **/
+
+#define MCU_IMPLEMENTS_CUSTOM_BUFFER
+#include "pico/util/queue.h"
+
+#define DECL_BUFFER(type, name, size)        \
+	static queue_t name##_bufferdata;        \
+	static const uint8_t name##_size = size; \
+	static const uint8_t name##_typesize = sizeof(type);
+
+#define BUFFER_AUTOINIT(buffer) ({                                               \
+	if (!buffer##_bufferdata.element_size && !buffer##_bufferdata.element_count) \
+	{                                                                            \
+		queue_init(&buffer##_bufferdata, buffer##_typesize, buffer##_size);      \
+	}                                                                            \
+})
+
+#define BUFFER_WRITE_AVAILABLE(buffer) ({BUFFER_AUTOINIT(buffer); buffer##_size - queue_get_level(&buffer##_bufferdata); })
+#define BUFFER_READ_AVAILABLE(buffer) ({BUFFER_AUTOINIT(buffer); queue_get_level(&buffer##_bufferdata); })
+#define BUFFER_EMPTY(buffer) ({BUFFER_AUTOINIT(buffer); queue_is_empty(&buffer##_bufferdata); })
+#define BUFFER_FULL(buffer) ({BUFFER_AUTOINIT(buffer); queue_is_full(&buffer##_bufferdata); })
+#define BUFFER_PEEK(buffer, ptr) ({BUFFER_AUTOINIT(buffer); queue_peek_blocking(&buffer##_bufferdata, ptr); })
+#define BUFFER_DEQUEUE(buffer, ptr) ({BUFFER_AUTOINIT(buffer); queue_try_remove(&buffer##_bufferdata, ptr); })
+#define BUFFER_ENQUEUE(buffer, ptr) ({BUFFER_AUTOINIT(buffer); queue_try_add(&buffer##_bufferdata, ptr); })
+#define BUFFER_WRITE(buffer, ptr, len, written) ({     \
+	BUFFER_AUTOINIT(buffer);                           \
+	written = 0;                                       \
+	uint8_t l = len;                                   \
+	while (l--)                                        \
+	{                                                  \
+		if (!queue_try_add(&buffer##_bufferdata, ptr)) \
+		{                                              \
+			break;                                     \
+		}                                              \
+		written++;                                     \
+		ptr++;                                         \
+	}                                                  \
+})
+
+#define BUFFER_READ(buffer, ptr, len, read) ({            \
+	BUFFER_AUTOINIT(buffer);                              \
+	read = 0;                                             \
+	uint8_t l = len;                                      \
+	while (l--)                                           \
+	{                                                     \
+		if (!queue_try_remove(&buffer##_bufferdata, ptr)) \
+		{                                                 \
+			break;                                        \
+		}                                                 \
+		read++;                                           \
+		ptr++;                                            \
+	}                                                     \
+})
+
+#define BUFFER_CLEAR(buffer) ({                                         \
+	BUFFER_AUTOINIT(buffer);                                            \
+	queue_free(&buffer##_bufferdata);                                   \
+	queue_init(&buffer##_bufferdata, buffer##_size, buffer##_typesize); \
+})
 
 #ifdef __cplusplus
 }
