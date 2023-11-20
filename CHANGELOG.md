@@ -8,6 +8,35 @@
 
 # Changelog
 
+## [1.8.4] - 17-11-2023
+
+### Added
+
+- added support for 74HC595 custom shift register using PIO (#568)
+- added function to get parser internal position (#537)
+- added new debug stream option to use a dedicated COM channel to print debug verbose (#548)
+- added option to control how soft limits are treated (alarm or error) and if the program flow continues or holds in case of error (#572)
+
+### Changed
+
+- rebuilded virtual emulator for Windows (#569)
+
+### Fixed
+
+- fixed non linear acceleration steps that generated motor noise on acceleration and deacceleration. These issues were introduce with change #561 (#571)
+- reduced itp timer calculations for blocks at speeds bellow the interpolator sample frequency leading to incorrect timing on these slow speed blocks (#571)
+- fixed stepper timer running at half the target speed on ESP32 using emulated PWM (#567)
+- fixed cooland funtions M7 and M8 (#562)
+- fixed step generation is interrupted while processing incomplete command (#565)
+- fixed JOG flag being cleared while parsing command (caused with #565) (#573)
+
+## [1.8.3] - 11-11-2023
+
+### Fixed
+
+- fixed motion stall if the motion has an instant jump from speed 0 to the target speed (instant acceleration) causing the motion speed not to be correctly calculated and stalling the whole interpolator queue. (#561)
+- fixed error with option STATUS_AUTOMATIC_REPORT_INTERVAL enabled (#559)
+
 ## [1.8.2] - 03-11-2023
 
 ### Fixed
@@ -1393,6 +1422,8 @@ Version 1.1.0 comes with many added features and improvements over the previous 
 
 ### Initial release
 
+[1.8.4]: https://github.com/Paciente8159/uCNC/releases/tag/v1.8.4
+[1.8.3]: https://github.com/Paciente8159/uCNC/releases/tag/v1.8.3
 [1.8.2]: https://github.com/Paciente8159/uCNC/releases/tag/v1.8.2
 [1.8.1]: https://github.com/Paciente8159/uCNC/releases/tag/v1.8.1
 [1.8.0]: https://github.com/Paciente8159/uCNC/releases/tag/v1.8.0

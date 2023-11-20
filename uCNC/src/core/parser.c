@@ -184,7 +184,11 @@ void parser_get_modes(uint8_t *modalgroups, uint16_t *feed, uint16_t *spindle, u
 	*spindle = (uint16_t)ABS(parser_state.spindle);
 	*coolant = parser_state.groups.coolant;
 	modalgroups[9] = (parser_state.groups.coolant == M9) ? 9 : MIN(parser_state.groups.coolant + 6, 8);
+#if TOOL_COUNT > 1
 	modalgroups[11] = parser_state.tool_index;
+#else
+	modalgroups[11] = 1;
+#endif
 #else
 	modalgroups[8] = 5;
 	modalgroups[9] = 9;
@@ -483,7 +487,6 @@ static uint8_t parser_grbl_command(void)
 			{
 				return STATUS_IDLE_ERROR;
 			}
-			cnc_set_exec_state(EXEC_JOG);
 			return GRBL_JOG_CMD;
 		}
 		break;
@@ -1052,7 +1055,7 @@ static uint8_t parser_validate_command(parser_state_t *new_state, parser_words_t
 
 // RS274NGC v3 - 3.7 Other Input Codes
 // Words S and T must be positive
-#if TOOL_COUNT > 0
+#if TOOL_COUNT > 1
 	if (words->s < 0 || words->t < 0)
 	{
 		return STATUS_NEGATIVE_VALUE;
@@ -1180,6 +1183,7 @@ uint8_t parser_exec_command(parser_state_t *new_state, parser_words_t *words, pa
 		new_state->spindle = (uint16_t)trunc(words->s);
 	}
 
+#if TOOL_COUNT > 1
 	// 5. select tool
 	if (CHECKFLAG(cmd->words, GCODE_WORD_T))
 	{
@@ -1197,6 +1201,7 @@ uint8_t parser_exec_command(parser_state_t *new_state, parser_words_t *words, pa
 		tool_change(words->t);
 		new_state->tool_index = new_state->groups.tool_change;
 	}
+#endif
 
 	// 7. spindle on/rev/off (M3/M4/M5)
 	block_data.spindle = new_state->spindle;
@@ -1627,65 +1632,67 @@ uint8_t parser_exec_command(parser_state_t *new_state, parser_words_t *words, pa
 			{
 				return STATUS_FEED_NOT_SET;
 			}
-
-			// target points
-			x = target[a] - parser_last_pos[a];
-			y = target[b] - parser_last_pos[b];
-			float center_offset_a = words->ijk[offset_a];
-			float center_offset_b = words->ijk[offset_b];
-			// radius mode
-			if (CHECKFLAG(cmd->words, GCODE_WORD_R))
+			else
 			{
-				if (x == 0 && y == 0)
+				// target points
+				x = target[a] - parser_last_pos[a];
+				y = target[b] - parser_last_pos[b];
+				float center_offset_a = words->ijk[offset_a];
+				float center_offset_b = words->ijk[offset_b];
+				// radius mode
+				if (CHECKFLAG(cmd->words, GCODE_WORD_R))
 				{
-					return STATUS_GCODE_INVALID_TARGET;
+					if (x == 0 && y == 0)
+					{
+						return STATUS_GCODE_INVALID_TARGET;
+					}
+
+					float x_sqr = x * x;
+					float y_sqr = y * y;
+					float c_factor = words->r * words->r;
+					c_factor = fast_flt_mul4(c_factor) - x_sqr - y_sqr;
+
+					if (c_factor < 0)
+					{
+						return STATUS_GCODE_ARC_RADIUS_ERROR;
+					}
+
+					c_factor = -sqrt((c_factor) / (x_sqr + y_sqr));
+
+					if (new_state->groups.motion == G3)
+					{
+						c_factor = -c_factor;
+					}
+
+					radius = words->r;
+					if (words->r < 0)
+					{
+						c_factor = -c_factor;
+						radius = -radius; // Finished with r. Set to positive for mc_arc
+					}
+
+					// Complete the operation by calculating the actual center of the arc
+					center_offset_a = (x - (y * c_factor));
+					center_offset_b = (y + (x * c_factor));
+					center_offset_a = fast_flt_div2(center_offset_a);
+					center_offset_b = fast_flt_div2(center_offset_b);
+				}
+				else // offset mode
+				{
+					// calculate radius and check if center is within tolerances
+					radius = sqrtf(center_offset_a * center_offset_a + center_offset_b * center_offset_b);
+					// calculates the distance between the center point and the target points and compares with the center offset distance
+					float x1 = x - center_offset_a;
+					float y1 = y - center_offset_b;
+					float r1 = sqrt(x1 * x1 + y1 * y1);
+					if (fabs(radius - r1) > 0.002) // error must not exceed 0.002mm according to the NIST RS274NGC standard
+					{
+						return STATUS_GCODE_INVALID_TARGET;
+					}
 				}
 
-				float x_sqr = x * x;
-				float y_sqr = y * y;
-				float c_factor = words->r * words->r;
-				c_factor = fast_flt_mul4(c_factor) - x_sqr - y_sqr;
-
-				if (c_factor < 0)
-				{
-					return STATUS_GCODE_ARC_RADIUS_ERROR;
-				}
-
-				c_factor = -sqrt((c_factor) / (x_sqr + y_sqr));
-
-				if (new_state->groups.motion == G3)
-				{
-					c_factor = -c_factor;
-				}
-
-				radius = words->r;
-				if (words->r < 0)
-				{
-					c_factor = -c_factor;
-					radius = -radius; // Finished with r. Set to positive for mc_arc
-				}
-
-				// Complete the operation by calculating the actual center of the arc
-				center_offset_a = (x - (y * c_factor));
-				center_offset_b = (y + (x * c_factor));
-				center_offset_a = fast_flt_div2(center_offset_a);
-				center_offset_b = fast_flt_div2(center_offset_b);
+				error = mc_arc(target, center_offset_a, center_offset_b, radius, a, b, (new_state->groups.motion == 2), &block_data);
 			}
-			else // offset mode
-			{
-				// calculate radius and check if center is within tolerances
-				radius = sqrtf(center_offset_a * center_offset_a + center_offset_b * center_offset_b);
-				// calculates the distance between the center point and the target points and compares with the center offset distance
-				float x1 = x - center_offset_a;
-				float y1 = y - center_offset_b;
-				float r1 = sqrt(x1 * x1 + y1 * y1);
-				if (fabs(radius - r1) > 0.002) // error must not exceed 0.002mm according to the NIST RS274NGC standard
-				{
-					return STATUS_GCODE_INVALID_TARGET;
-				}
-			}
-
-			error = mc_arc(target, center_offset_a, center_offset_b, radius, a, b, (new_state->groups.motion == 2), &block_data);
 			break;
 #endif
 #ifndef DISABLE_PROBING_SUPPORT
@@ -1811,6 +1818,11 @@ static uint8_t parser_gcode_command(bool is_jogging)
 	if (result != STATUS_OK)
 	{
 		return result;
+	}
+
+	if (is_jogging)
+	{
+		cnc_set_exec_state(EXEC_JOG);
 	}
 
 	// validates command
@@ -2293,23 +2305,22 @@ static uint8_t parser_mcode_word(uint8_t code, uint8_t mantissa, parser_state_t 
 		code = (code == 5) ? M5 : code - 2;
 		new_state->groups.spindle_turning = code;
 		break;
+#if TOOL_COUNT > 1
 	case 6:
 		new_group |= GCODE_GROUP_TOOLCHANGE;
 		break;
-#if ASSERT_PIN(COOLANT_MIST)
-	case 7:
 #endif
-#ifdef M7_SAME_AS_M8
 	case 7:
-#endif
 	case 8:
+#ifdef ENABLE_COOLANT
 		cmd->groups |= GCODE_GROUP_COOLANT; // word overlapping allowed
-#if ASSERT_PIN(COOLANT_MIST)
+#ifndef M7_SAME_AS_M8
 		new_state->groups.coolant |= ((code == 8) ? M8 : M7);
 #else
 		new_state->groups.coolant |= M8;
 #endif
 		return STATUS_OK;
+#endif
 	case 9:
 		cmd->groups |= GCODE_GROUP_COOLANT;
 		new_state->groups.coolant = M9;
@@ -2568,7 +2579,9 @@ void parser_reset(bool stopgroup_only)
 	parser_state.groups.coolant = M9;		  // M9
 	parser_state.groups.spindle_turning = M5; // M5
 	parser_state.groups.tool_change = 1;
+#if TOOL_COUNT > 1
 	parser_state.tool_index = g_settings.default_tool;
+#endif
 	parser_state.groups.path_mode = G61;
 #endif
 	parser_state.groups.motion = G1;											   // G1

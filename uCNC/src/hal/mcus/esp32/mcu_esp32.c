@@ -637,7 +637,8 @@ void mcu_uart_flush(void)
 {
 	while (!BUFFER_EMPTY(uart_tx))
 	{
-		uint8_t tmp[UART_TX_BUFFER_SIZE];
+		uint8_t tmp[UART_TX_BUFFER_SIZE + 1];
+		memset(tmp, 0, sizeof(tmp));
 		uint8_t r;
 
 		BUFFER_READ(uart_tx, tmp, UART_TX_BUFFER_SIZE, r);
@@ -683,7 +684,8 @@ void mcu_uart2_flush(void)
 {
 	while (!BUFFER_EMPTY(uart2_tx))
 	{
-		uint8_t tmp[UART2_TX_BUFFER_SIZE];
+		uint8_t tmp[UART2_TX_BUFFER_SIZE + 1];
+		memset(tmp, 0, sizeof(tmp));
 		uint8_t r;
 
 		BUFFER_READ(uart2_tx, tmp, UART2_TX_BUFFER_SIZE, r);
@@ -739,7 +741,7 @@ void mcu_freq_to_clocks(float frequency, uint16_t *ticks, uint16_t *prescaller)
 #ifndef IC74HC595_HAS_PWMS
 	uint32_t totalticks = (uint32_t)(500000.0f / frequency);
 #else
-	uint32_t totalticks = (uint32_t)(125000.0f / frequency);
+	uint32_t totalticks = (uint32_t)(62500.0f / frequency);
 #endif
 	*prescaller = 1;
 	while (totalticks > 0xFFFF)
@@ -756,7 +758,7 @@ float mcu_clocks_to_freq(uint16_t ticks, uint16_t prescaller)
 #ifndef IC74HC595_HAS_PWMS
 	return (500000.0f / ((float)ticks * (float)prescaller));
 #else
-	return (125000.0f / ((float)ticks * (float)prescaller));
+	return (62500.0f / ((float)ticks * (float)prescaller));
 #endif
 }
 
